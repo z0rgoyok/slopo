@@ -28,6 +28,7 @@ def sync_index(
     directory: Path,
     body_node_count_threshold: int,
     exclude: list[str],
+    source_extensions: list[str] | None = None,
 ) -> SyncStats:
     indexed_files = 0
     skipped_files = 0
@@ -36,7 +37,7 @@ def sync_index(
     indexed: dict[str, IndexedFile] = list_indexed_files(conn)
     seen_paths: set[str] = set()
 
-    for path_str in scan_directory(directory, exclude):
+    for path_str in scan_directory(directory, exclude, source_extensions):
         seen_paths.add(path_str)
         full_path: Path = directory / path_str
         mtime = full_path.stat().st_mtime

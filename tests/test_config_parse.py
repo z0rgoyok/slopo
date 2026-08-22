@@ -41,6 +41,7 @@ def test_returns_config_with_defaults_when_only_required_fields_present():
     assert cfg.similarity_threshold == 0.92
     assert cfg.rerank_threshold == 0.94
     assert cfg.body_node_count_threshold == 10
+    assert cfg.source_extensions is None
 
 
 def test_overrides_defaults_when_optional_fields_present():
@@ -190,6 +191,32 @@ def test_source_dir_exclude_empty_string_item_rejected():
         ConfigError, match="'source_dir_exclude' items must be non-empty strings"
     ):
         parse_config(_minimal_raw(source_dir_exclude=[""]), source="<test>")
+
+
+# --- source_extensions ---
+
+
+def test_source_extensions_are_normalized_and_deduplicated():
+    cfg = parse_config(
+        _minimal_raw(source_extensions=[".TS", ".tsx", ".ts"]), source="<test>"
+    )
+
+    assert cfg.source_extensions == [".ts", ".tsx"]
+
+
+def test_source_extensions_reject_empty_list():
+    with pytest.raises(ConfigError, match="'source_extensions' must not be empty"):
+        parse_config(_minimal_raw(source_extensions=[]), source="<test>")
+
+
+def test_source_extensions_require_leading_dot():
+    with pytest.raises(ConfigError, match="items must be extensions"):
+        parse_config(_minimal_raw(source_extensions=["tsx"]), source="<test>")
+
+
+def test_source_extensions_reject_unsupported_extension():
+    with pytest.raises(ConfigError, match="unsupported source extensions: .vue"):
+        parse_config(_minimal_raw(source_extensions=[".vue"]), source="<test>")
 
 
 # --- path overrides ---

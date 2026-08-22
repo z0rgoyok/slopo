@@ -15,6 +15,15 @@ For details, see [Embedding models benchmark for code duplication detection](htt
 Python, TypeScript/TSX, JavaScript, Java, Kotlin, C#, C, Go, Rust, PHP, Elixir,
 Dart, Swift
 
+Use `source_extensions` when one source tree contains several supported languages but
+they need separate indexes and baselines:
+
+```yaml
+source_extensions:
+  - ".ts"
+  - ".tsx"
+```
+
 ## How it works
 
 It takes a different approach than typical duplication detection. For every code unit, it calculates an embedding, then looks for pairs whose embeddings are close. Similar code is not necessarily a duplicate, so each pair is a potential duplicate to confirm.

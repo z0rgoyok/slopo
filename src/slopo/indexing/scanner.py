@@ -12,8 +12,16 @@ logger = logging.getLogger(__name__)
 _MAX_BODY_CHARS = 10_000
 
 
-def scan_directory(root: Path, exclude: list[str]) -> Iterator[str]:
-    extensions = supported_extensions()
+def scan_directory(
+    root: Path,
+    exclude: list[str],
+    source_extensions: list[str] | None = None,
+) -> Iterator[str]:
+    extensions = (
+        set(source_extensions)
+        if source_extensions is not None
+        else supported_extensions()
+    )
     spec = PathSpec.from_lines("gitignore", exclude)
     for path in root.rglob("*"):
         if path.is_file() and path.suffix.lower() in extensions:

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from slopo.indexing.scanner import filter_units, parse_file, scan_directory
 
 _JAVA = """\
@@ -26,6 +28,17 @@ def test_scans_all_supported_languages(tmp_path: Path):
     assert scanned == {"Calculator.java", "Increment.kt"}
 
 
+def test_scans_only_configured_extensions(tmp_path: Path):
+    (tmp_path / "Calculator.java").write_text(_JAVA)
+    (tmp_path / "Increment.kt").write_text(_KOTLIN)
+
+    scanned = set(
+        scan_directory(tmp_path, exclude=[], source_extensions=[".kt"])
+    )
+
+    assert scanned == {"Increment.kt"}
+
+
 def test_parses_units_from_each_language(tmp_path: Path):
     (tmp_path / "Calculator.java").write_text(_JAVA)
     (tmp_path / "Increment.kt").write_text(_KOTLIN)
@@ -35,6 +48,35 @@ def test_parses_units_from_each_language(tmp_path: Path):
 
     assert [u.name for u in java_units] == ["increment"]
     assert [u.name for u in kotlin_units] == ["increment"]
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "expected_name"),
+    [
+        ("module.mjs", "export function increment(a) { return a + 1; }", "increment"),
+        ("module.cjs", "function increment(a) { return a + 1; }", "increment"),
+        ("module.mts", "export function increment(a: number) { return a + 1; }", "increment"),
+        ("module.cts", "function increment(a: number) { return a + 1; }", "increment"),
+        ("component.tsx", "function View() { return <main />; }", "View"),
+        ("build.kts", "fun increment(a: Int): Int { return a + 1 }", "increment"),
+        ("config.exs", "def increment(a), do: a + 1", "increment"),
+        ("module.dart", "int increment(int a) { return a + 1; }", "increment"),
+        ("Module.swift", "func increment(_ a: Int) -> Int { a + 1 }", "increment"),
+        ("module.c", "int increment(int a) { return a + 1; }", "increment"),
+        ("module.h", "static int increment(int a) { return a + 1; }", "increment"),
+    ],
+)
+def test_scans_and_parses_supported_extension_variants(
+    tmp_path: Path,
+    filename: str,
+    source: str,
+    expected_name: str,
+):
+    path = tmp_path / filename
+    path.write_text(source)
+
+    assert list(scan_directory(tmp_path, exclude=[])) == [filename]
+    assert [unit.name for unit in parse_file(path)] == [expected_name]
 
 
 def test_recurses_into_subdirectories_with_paths_relative_to_root(tmp_path: Path):

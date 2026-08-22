@@ -96,3 +96,25 @@ def test_removes_units_when_a_file_is_deleted(tmp_path: Path, conn: sqlite3.Conn
     )
     assert _indexed_files(conn) == {"Calculator.java"}
     assert _unit_count(conn) == 2
+
+
+def test_removes_files_excluded_by_a_changed_extension_scope(
+    tmp_path: Path, conn: sqlite3.Connection
+):
+    (tmp_path / "Calculator.java").write_text(_JAVA)
+    (tmp_path / "Greeter.java").write_text(_JAVA)
+
+    sync_index(conn, tmp_path, body_node_count_threshold=0, exclude=[])
+    result = sync_index(
+        conn,
+        tmp_path,
+        body_node_count_threshold=0,
+        exclude=[],
+        source_extensions=[".kt"],
+    )
+
+    assert result == SyncStats(
+        indexed_files=0, skipped_files=0, indexed_units=0, removed_files=2
+    )
+    assert _indexed_files(conn) == set()
+    assert _unit_count(conn) == 0

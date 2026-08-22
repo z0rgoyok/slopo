@@ -17,6 +17,11 @@ source_dir:
 #  - "**/test/**"
 #  - "*.test.ts"
 
+# File extensions to index. Optional; all supported extensions are used by default.
+#source_extensions:
+#  - ".ts"
+#  - ".tsx"
+
 # Embedding model in LiteLLM format, e.g. "jina_ai/jina-code-embeddings-0.5b"
 # For all supported providers see https://docs.litellm.ai/docs/providers
 embedding_model:
@@ -52,6 +57,7 @@ class Config:
     similarity_threshold: float
     rerank_threshold: float
     body_node_count_threshold: int
+    source_extensions: list[str] | None = None
 
 
 def load_config(path: Path) -> Config:
@@ -75,6 +81,7 @@ def load_config(path: Path) -> Config:
 _KNOWN_CONFIG_KEYS = {
     "source_dir",
     "source_dir_exclude",
+    "source_extensions",
     "db_file",
     "report_dir",
     "ignore_file",
@@ -131,6 +138,7 @@ def parse_config(raw: Any, source: str) -> Config:
         body_node_count_threshold=_optional_positive_int(
             raw, "body_node_count_threshold", source, default=10
         ),
+        source_extensions=_optional_source_extensions(raw, source),
     )
 
 
@@ -196,6 +204,35 @@ def _optional_str_list(raw: dict[str, Any], key: str, source: str) -> list[str]:
             )
         items.append(item)
     return items
+
+
+def _optional_source_extensions(
+    raw: dict[str, Any], source: str
+) -> list[str] | None:
+    if raw.get("source_extensions") is None:
+        return None
+    extensions = _optional_str_list(raw, "source_extensions", source)
+    if not extensions:
+        raise ConfigError(f"{source}: 'source_extensions' must not be empty")
+
+    normalized = []
+    for extension in extensions:
+        extension = extension.lower()
+        if not re.fullmatch(r"\.[a-z0-9]+", extension):
+            raise ConfigError(
+                f"{source}: 'source_extensions' items must be extensions such as '.ts',"
+                f" got {extension!r}"
+            )
+        if extension not in normalized:
+            normalized.append(extension)
+
+    from slopo.indexing.parsing.registry import supported_extensions
+
+    unsupported = set(normalized) - supported_extensions()
+    if unsupported:
+        values = ", ".join(sorted(unsupported))
+        raise ConfigError(f"{source}: unsupported source extensions: {values}")
+    return normalized
 
 
 _RESERVED_EMBEDDING_PARAMS = ("model", "input", "dimensions", "api_key")
