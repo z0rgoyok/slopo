@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from slopo.indexing.parsing.base import CodeUnit
-from slopo.indexing.parsing.lang.typescript import parse
+from slopo.indexing.parsing.lang.typescript import parse, parse_tsx
 
 FIXTURES = Path(__file__).parent / "fixtures" / "typescript"
 
@@ -115,3 +115,11 @@ def test_strips_line_block_and_doc_comments_from_body(comments):
         "  return amount * (1 + rate);\n"
         "}"
     )
+
+
+def test_tsx_parser_extracts_components_and_nested_callbacks():
+    units = parse_tsx((FIXTURES / "Example.tsx").read_bytes())
+
+    assert [unit.name for unit in units] == ["Greeting", "Button", "<unknown>"]
+    assert "<strong>Hello, {name}!</strong>" in units[0].body
+    assert "<button" in units[1].body

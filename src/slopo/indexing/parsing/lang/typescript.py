@@ -1,10 +1,13 @@
 import tree_sitter_typescript
 from tree_sitter import Language, Node, Parser
 
-from slopo.indexing.parsing.base import CodeUnit, hash_body
+from slopo.indexing.parsing.base import CodeUnit
+from slopo.indexing.parsing.tree_sitter_support import code_unit
 
 _LANGUAGE = Language(tree_sitter_typescript.language_typescript())
 _PARSER = Parser(_LANGUAGE)
+_TSX_LANGUAGE = Language(tree_sitter_typescript.language_tsx())
+_TSX_PARSER = Parser(_TSX_LANGUAGE)
 
 _COMMENT_TYPES = {"comment"}
 
@@ -18,7 +21,15 @@ _UNIT_TYPES = {
 
 
 def parse(source: bytes) -> list[CodeUnit]:
-    tree = _PARSER.parse(source)
+    return _parse(_PARSER, source)
+
+
+def parse_tsx(source: bytes) -> list[CodeUnit]:
+    return _parse(_TSX_PARSER, source)
+
+
+def _parse(parser: Parser, source: bytes) -> list[CodeUnit]:
+    tree = parser.parse(source)
     units: list[CodeUnit] = []
     _collect_units(tree.root_node, source, units)
     return units
@@ -26,15 +37,14 @@ def parse(source: bytes) -> list[CodeUnit]:
 
 def _collect_units(node: Node, source: bytes, units: list[CodeUnit]) -> None:
     if node.type in _UNIT_TYPES:
-        body = _body_without_comments(node, source)
         units.append(
-            CodeUnit(
+            code_unit(
                 name=_unit_name(node),
-                body=body,
-                start_line=node.start_point[0] + 1,
-                end_line=node.end_point[0] + 1,
-                body_node_count=_count_body_nodes(node),
-                body_hash=hash_body(body),
+                start=node,
+                end=node,
+                body=node.child_by_field_name("body"),
+                source=source,
+                comment_types=_COMMENT_TYPES,
             )
         )
     for child in node.children:
@@ -65,37 +75,3 @@ def _binding_name_node(node: Node) -> Node | None:
         return left
     return None
 
-
-def _body_without_comments(unit: Node, source: bytes) -> str:
-    comment_spans: list[tuple[int, int]] = []
-    _collect_comment_spans(unit, comment_spans)
-
-    pieces: list[bytes] = []
-    cursor = unit.start_byte
-    for start, end in sorted(comment_spans):
-        pieces.append(source[cursor:start])
-        cursor = end
-    pieces.append(source[cursor : unit.end_byte])
-    return b"".join(pieces).decode()
-
-
-def _collect_comment_spans(node: Node, spans: list[tuple[int, int]]) -> None:
-    if node.type in _COMMENT_TYPES:
-        spans.append((node.start_byte, node.end_byte))
-        return
-    for child in node.children:
-        _collect_comment_spans(child, spans)
-
-
-def _count_body_nodes(unit: Node) -> int:
-    body = unit.child_by_field_name("body")
-    if body is None:
-        return 0
-    return _count_named_nodes(body)
-
-
-def _count_named_nodes(node: Node) -> int:
-    count = 1 if node.is_named else 0
-    for child in node.children:
-        count += _count_named_nodes(child)
-    return count
