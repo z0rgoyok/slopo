@@ -18,6 +18,13 @@ fun increment(a: Int): Int {
 }
 """
 
+_PYTHON_DATACLASS = """\
+@dataclass
+class AgeGroupSpec:
+    minimum_age: int
+    maximum_age: int = 99
+"""
+
 
 def test_scans_all_supported_languages(tmp_path: Path):
     (tmp_path / "Calculator.java").write_text(_JAVA)
@@ -32,9 +39,7 @@ def test_scans_only_configured_extensions(tmp_path: Path):
     (tmp_path / "Calculator.java").write_text(_JAVA)
     (tmp_path / "Increment.kt").write_text(_KOTLIN)
 
-    scanned = set(
-        scan_directory(tmp_path, exclude=[], source_extensions=[".kt"])
-    )
+    scanned = set(scan_directory(tmp_path, exclude=[], source_extensions=[".kt"]))
 
     assert scanned == {"Increment.kt"}
 
@@ -55,7 +60,11 @@ def test_parses_units_from_each_language(tmp_path: Path):
     [
         ("module.mjs", "export function increment(a) { return a + 1; }", "increment"),
         ("module.cjs", "function increment(a) { return a + 1; }", "increment"),
-        ("module.mts", "export function increment(a: number) { return a + 1; }", "increment"),
+        (
+            "module.mts",
+            "export function increment(a: number) { return a + 1; }",
+            "increment",
+        ),
         ("module.cts", "function increment(a: number) { return a + 1; }", "increment"),
         ("component.tsx", "function View() { return <main />; }", "View"),
         ("build.kts", "fun increment(a: Int): Int { return a + 1 }", "increment"),
@@ -102,6 +111,15 @@ def test_excludes_units_below_body_node_count_threshold(tmp_path: Path):
     filtered = filter_units(units, body_node_count_threshold=1000)
 
     assert filtered == []
+
+
+def test_keeps_data_only_dataclass_at_eight_node_threshold(tmp_path: Path):
+    path = tmp_path / "age_group.py"
+    path.write_text(_PYTHON_DATACLASS)
+
+    filtered = filter_units(parse_file(path), body_node_count_threshold=8)
+
+    assert [unit.name for unit in filtered] == ["AgeGroupSpec"]
 
 
 def test_excludes_units_exceeding_max_body_chars(tmp_path: Path):

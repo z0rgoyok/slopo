@@ -2,10 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from slopo.indexing.parsing.base import CodeUnit
+from slopo.indexing.parsing.base import CodeUnit, hash_body
 from slopo.indexing.parsing.lang.python import parse
 
 FIXTURES = Path(__file__).parent / "fixtures" / "python"
+
+_DATA_ONLY_DATACLASS = b"""\
+@dataclass
+class AgeGroupSpec:
+    minimum_age: int
+    maximum_age: int = 99
+"""
 
 
 @pytest.fixture
@@ -36,6 +43,136 @@ def test_extracts_module_functions_and_methods(example):
         "__init__",
         "increment",
     ]
+
+
+def test_extracts_data_only_dataclass_as_class_unit():
+    units = parse(_DATA_ONLY_DATACLASS)
+
+    assert len(units) == 1
+    assert units[0].name == "AgeGroupSpec"
+    assert units[0].body == _DATA_ONLY_DATACLASS.decode().rstrip()
+    assert (units[0].start_line, units[0].end_line) == (1, 4)
+    assert units[0].body_node_count == 12
+    assert units[0].body_hash == hash_body(units[0].body)
+
+
+@pytest.mark.parametrize(
+    "decorator",
+    [
+        "@dataclass",
+        "@dataclass()",
+        "@dataclasses.dataclass",
+        "@dataclasses.dataclass(slots=True)",
+    ],
+)
+def test_extracts_supported_dataclass_decorator_forms(decorator: str):
+    source = f"{decorator}\nclass Settings:\n    enabled: bool\n".encode()
+    units = parse(source)
+
+    assert [unit.name for unit in units] == ["Settings"]
+    assert units[0].body == f"{decorator}\nclass Settings:\n    enabled: bool"
+
+
+@pytest.mark.parametrize("decorator", ["@dc", "@attrs.dataclass", "@dataclass.factory"])
+def test_does_not_resolve_unsupported_dataclass_aliases(decorator: str):
+    source = f"{decorator}\nclass Settings:\n    enabled: bool\n".encode()
+
+    assert parse(source) == []
+
+
+def test_does_not_extract_undecorated_data_class():
+    source = b"class Settings:\n    enabled: bool\n"
+
+    assert parse(source) == []
+
+
+def test_behavioral_dataclass_keeps_method_unit_without_overlapping_class_unit():
+    source = b"""\
+@dataclass
+class Settings:
+    enabled: bool
+
+    def toggle(self):
+        self.enabled = not self.enabled
+"""
+
+    assert [unit.name for unit in parse(source)] == ["toggle"]
+
+
+def test_dataclass_body_strips_comments_and_docstring_from_actual_class_source():
+    source = '''\
+@dataclass
+class AgeGroupSpec:
+    # Пояснение конкретного источника не должно влиять на поиск дублей.
+    """Границы, используемые в отчёте."""
+    minimum_age: int  # включительно
+    maximum_age: int = 99
+    marker: str = "#"
+'''.encode()
+
+    units = parse(source)
+
+    assert len(units) == 1
+    assert units[0].body == (
+        "@dataclass\n"
+        "class AgeGroupSpec:\n"
+        "    \n"
+        "    \n"
+        "    minimum_age: int  \n"
+        "    maximum_age: int = 99\n"
+        '    marker: str = "#"'
+    )
+    assert (units[0].start_line, units[0].end_line) == (1, 7)
+
+
+def test_dataclasses_with_async_or_nested_behavior_keep_recursive_method_units():
+    source = b"""\
+@dataclass
+class AsyncSettings:
+    enabled: bool
+
+    async def refresh(self):
+        return self.enabled
+
+
+@dataclass
+class NestedSettings:
+    enabled: bool
+
+    class Metadata:
+        def label(self):
+            return "settings"
+"""
+
+    assert [unit.name for unit in parse(source)] == ["refresh", "label"]
+
+
+def test_data_only_dataclass_allows_docstring_and_pass():
+    source = '''\
+@dataclass
+class Marker:
+    """Маркерный тип."""
+    pass
+'''.encode()
+
+    units = parse(source)
+
+    assert len(units) == 1
+    assert units[0].body == "@dataclass\nclass Marker:\n    \n    pass"
+    assert units[0].body_node_count == 2
+
+
+def test_dataclass_options_are_part_of_exact_body_and_hash():
+    template = """\
+{decorator}
+class Settings:
+    enabled: bool
+"""
+    mutable = parse(template.format(decorator="@dataclass").encode())[0]
+    frozen = parse(template.format(decorator="@dataclass(frozen=True)").encode())[0]
+
+    assert mutable.body != frozen.body
+    assert mutable.body_hash != frozen.body_hash
 
 
 def test_fstring_function_body_exact(example):
