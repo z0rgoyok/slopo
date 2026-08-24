@@ -16,9 +16,4 @@ def test_swift_function_body_includes_signature():
     units = parse((FIXTURES / "Example.swift").read_bytes())
 
     add = next(unit for unit in units if unit.name == "add")
-    assert add.body == (
-        "func add(_ a: Int, _ b: Int) -> Int {\n"
-        "    \n"
-        "    a + b\n"
-        "}"
-    )
+    assert add.body == ("func add(_ a: Int, _ b: Int) -> Int {\n    \n    a + b\n}")

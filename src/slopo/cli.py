@@ -113,7 +113,7 @@ def index(ctx: typer.Context) -> None:
         try:
             verify_source_dir(conn, cfg.source_dir)
         except ConfigurationMismatchError as e:
-            typer.echo(_configuration_mismatch_message(e), err=True)
+            typer.echo(_configuration_mismatch_message(e, cfg.db_file), err=True)
             raise typer.Exit(1)
     else:
         conn = create_db(cfg)
@@ -175,15 +175,24 @@ def _open_existing_db_or_exit(cfg: Config) -> sqlite3.Connection:
         )
         raise typer.Exit(1)
     except ConfigurationMismatchError as e:
-        typer.echo(_configuration_mismatch_message(e), err=True)
+        typer.echo(_configuration_mismatch_message(e, cfg.db_file), err=True)
         raise typer.Exit(1)
     except SchemaVersionMismatchError as e:
-        typer.echo(f"Error: {e}", err=True)
+        typer.echo(f"Error: {e} {_database_rebuild_message(cfg.db_file)}", err=True)
         raise typer.Exit(1)
 
 
-def _configuration_mismatch_message(e: ConfigurationMismatchError) -> str:
+def _configuration_mismatch_message(
+    e: ConfigurationMismatchError, db_file: Path
+) -> str:
     return (
         f"Error: configuration mismatch: {e.field} was set to {e.stored!r} when the"
-        f" database was created and cannot be changed (current config: {e.current!r})"
+        f" database was created and cannot be changed (current config: {e.current!r})."
+        f" {_database_rebuild_message(db_file)}"
+    )
+
+
+def _database_rebuild_message(db_file: Path) -> str:
+    return (
+        f"Delete the local database at {db_file} and run `slopo index` to rebuild it."
     )

@@ -54,9 +54,12 @@ def _data_only_dataclass_definition(node: Node) -> Node | None:
 
 
 def _is_dataclass_decorator(decorator: Node) -> bool:
-    if len(decorator.named_children) != 1:
+    targets = [
+        child for child in decorator.named_children if not _is_explanatory_node(child)
+    ]
+    if len(targets) != 1:
         return False
-    target = decorator.named_children[0]
+    target = targets[0]
     if target.type == "call":
         function = target.child_by_field_name("function")
         if function is None:
@@ -86,14 +89,17 @@ def _has_declarative_class_body(definition: Node) -> bool:
 
 
 def _is_declarative_class_statement(node: Node) -> bool:
-    if node.type in _COMMENT_TYPES or node.type == "pass_statement":
+    if node.type == "pass_statement" or _is_explanatory_node(node):
         return True
-    if _is_docstring(node):
-        return True
+    if node.type != "expression_statement" or len(node.named_children) != 1:
+        return False
+    assignment = node.named_children[0]
+    target = assignment.child_by_field_name("left")
     return (
-        node.type == "expression_statement"
-        and len(node.named_children) == 1
-        and node.named_children[0].type == "assignment"
+        assignment.type == "assignment"
+        and target is not None
+        and target.type == "identifier"
+        and assignment.child_by_field_name("type") is not None
     )
 
 
@@ -111,7 +117,7 @@ def _body_without_comments(unit: Node, source: bytes) -> str:
 
 
 def _collect_comment_spans(node: Node, spans: list[tuple[int, int]]) -> None:
-    if node.type in _COMMENT_TYPES or _is_docstring(node):
+    if _is_explanatory_node(node):
         spans.append((node.start_byte, node.end_byte))
         return
     for child in node.children:
@@ -126,12 +132,16 @@ def _count_body_nodes(definition: Node) -> int:
 
 
 def _count_named_nodes(node: Node) -> int:
-    if _is_docstring(node):
+    if _is_explanatory_node(node):
         return 0
     count = 1 if node.is_named else 0
     for child in node.children:
         count += _count_named_nodes(child)
     return count
+
+
+def _is_explanatory_node(node: Node) -> bool:
+    return node.type in _COMMENT_TYPES or _is_docstring(node)
 
 
 def _is_docstring(node: Node) -> bool:

@@ -75,7 +75,11 @@ def _expression_name(node: Node) -> str:
             return node_text(name) or "<unknown>"
         if parent.type == "static_final_declaration":
             identifier = next(
-                (child for child in parent.named_children if child.type == "identifier"),
+                (
+                    child
+                    for child in parent.named_children
+                    if child.type == "identifier"
+                ),
                 None,
             )
             return node_text(identifier) or "<unknown>"
@@ -84,4 +88,6 @@ def _expression_name(node: Node) -> str:
 
 
 def _contains(candidate: Node, node: Node) -> bool:
-    return candidate.start_byte <= node.start_byte and candidate.end_byte >= node.end_byte
+    return (
+        candidate.start_byte <= node.start_byte and candidate.end_byte >= node.end_byte
+    )

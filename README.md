@@ -30,6 +30,8 @@ It takes a different approach than typical duplication detection. For every code
 
 The result is clusters of similar code units, ranked by similarity and by distance in the codebase. These clusters are meant as input for your AI coding agent, which can check whether a cluster is a real duplicate. Reviewed clusters can be marked as ignored or passed on for refactoring.
 
+For Python, Slopo also indexes a `@dataclass` or `@dataclasses.dataclass` declaration when its body contains only annotated fields, comments, a docstring, or `pass`. A dataclass containing methods, nested behavior, or unannotated assignments is not emitted as a class unit; its methods are still indexed separately, avoiding overlapping class and method embeddings.
+
 [Example report](doc/example-report) generated from Slopo code (`src` directory, git tag `v0.2.0`).
 
 ## Accessing embedding model
@@ -130,7 +132,9 @@ Most configuration is done with a configuration file with two exceptions:
 1. The location of the configuration file can be overridden with the `--config` option.
 2. The API key can be set with the `SLOPO_EMBEDDING_API_KEY` environment variable, also picked up from a `.env` file in the current directory.
 
-**Be aware that some parameters can't be changed after first indexing.** You need to remove `slopo.db` and index/embed from the beginning: `source_dir`, `embedding_model`, `embedding_dimensions`, `body_node_count_threshold`.
+**Be aware that some parameters can't be changed after first indexing.** You need to remove `slopo.db` and index/embed from the beginning: `source_dir`, `source_extensions`, `embedding_model`, `embedding_dimensions`, `body_node_count_threshold`.
+
+The database also records a fingerprint of the active language parsers. Slopo refuses to reuse an index after a relevant parser changes, preventing unchanged file mtimes from preserving stale code units. Remove the local database and run `slopo index` to rebuild it when the CLI reports this mismatch.
 
 ### All configurable parameters
 
@@ -152,7 +156,7 @@ embedding_params:
 - `embedding_request_delay`: Delay in seconds after every batched request, by default no delay. Increase if you reach rate limits.
 - `similarity_threshold`: Controls minimal cosine similarity between embeddings.
 - `rerank_threshold`: Controls minimal similarity after applying a boost reflecting distance in the codebase.
-- `body_node_count_threshold`: Number of AST nodes inside the body (excluding signature and annotations). This value reflects the minimum code complexity of the included code unit, more precise than text length. Increase if you notice unwanted, too-small code units in the report.
+- `body_node_count_threshold`: Number of meaningful AST nodes inside the unit body. Function signatures and decorators do not contribute. In Python, comments and docstrings also do not contribute, while annotated fields and their defaults do contribute for data-only dataclass units. This value reflects the minimum code complexity of the included code unit, more precise than text length. Increase it if you notice unwanted, too-small code units in the report.
 
 ## Details
 

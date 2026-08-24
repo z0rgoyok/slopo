@@ -3,6 +3,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from slopo.config import Config
+from slopo.indexing.parsing.registry import parser_profile_fingerprint
 from slopo.schema import SCHEMA_VERSION, create_schema
 
 # Stay under the 999 SQLITE_MAX_VARIABLE_NUMBER default of pre-3.32 SQLite,
@@ -27,26 +28,30 @@ class SchemaVersionMismatchError(Exception):
 
 
 def open_db(cfg: Config) -> sqlite3.Connection:
+    parser_fingerprint = parser_profile_fingerprint(cfg.source_extensions)
     if not cfg.db_file.exists():
         raise DatabaseNotFoundError
     conn = _connect(cfg.db_file)
     _check_schema_version(conn)
-    _check_metadata(conn, cfg)
+    _check_metadata(conn, cfg, parser_fingerprint)
     return conn
 
 
 def create_db(cfg: Config) -> sqlite3.Connection:
+    parser_fingerprint = parser_profile_fingerprint(cfg.source_extensions)
     conn = _connect(cfg.db_file)
     create_schema(conn)
     conn.execute(
         "INSERT INTO metadata"
-        " (id, source_dir, embedding_model, embedding_dimensions, body_node_count_threshold)"
-        " VALUES (1, ?, ?, ?, ?)",
+        " (id, source_dir, embedding_model, embedding_dimensions,"
+        " body_node_count_threshold, parser_fingerprint)"
+        " VALUES (1, ?, ?, ?, ?, ?)",
         (
             str(cfg.source_dir.resolve()),
             cfg.embedding_model,
             cfg.embedding_dimensions,
             cfg.body_node_count_threshold,
+            parser_fingerprint,
         ),
     )
     conn.commit()
@@ -79,9 +84,12 @@ def _check_schema_version(conn: sqlite3.Connection) -> None:
         )
 
 
-def _check_metadata(conn: sqlite3.Connection, cfg: Config) -> None:
+def _check_metadata(
+    conn: sqlite3.Connection, cfg: Config, current_parser_fingerprint: str
+) -> None:
     stored = conn.execute(
-        "SELECT embedding_model, embedding_dimensions, body_node_count_threshold"
+        "SELECT embedding_model, embedding_dimensions, body_node_count_threshold,"
+        " parser_fingerprint"
         " FROM metadata WHERE id = 1"
     ).fetchone()
 
@@ -101,4 +109,8 @@ def _check_metadata(conn: sqlite3.Connection, cfg: Config) -> None:
             "body_node_count_threshold",
             str(stored[2]),
             str(cfg.body_node_count_threshold),
+        )
+    if stored[3] != current_parser_fingerprint:
+        raise ConfigurationMismatchError(
+            "parser_fingerprint", stored[3], current_parser_fingerprint
         )

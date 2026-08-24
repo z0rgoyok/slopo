@@ -20,9 +20,9 @@ fun increment(a: Int): Int {
 
 _PYTHON_DATACLASS = """\
 @dataclass
-class AgeGroupSpec:
-    minimum_age: int
-    maximum_age: int = 99
+class Bounds:
+    lower: int
+    upper: int = 99
 """
 
 
@@ -114,12 +114,12 @@ def test_excludes_units_below_body_node_count_threshold(tmp_path: Path):
 
 
 def test_keeps_data_only_dataclass_at_eight_node_threshold(tmp_path: Path):
-    path = tmp_path / "age_group.py"
+    path = tmp_path / "bounds.py"
     path.write_text(_PYTHON_DATACLASS)
 
     filtered = filter_units(parse_file(path), body_node_count_threshold=8)
 
-    assert [unit.name for unit in filtered] == ["AgeGroupSpec"]
+    assert [unit.name for unit in filtered] == ["Bounds"]
 
 
 def test_excludes_units_exceeding_max_body_chars(tmp_path: Path):

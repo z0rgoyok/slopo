@@ -74,4 +74,3 @@ def _binding_name_node(node: Node) -> Node | None:
             return left.child_by_field_name("property")
         return left
     return None
-

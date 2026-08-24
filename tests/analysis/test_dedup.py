@@ -71,9 +71,9 @@ def test_keeps_cluster_of_distinct_units_unchanged():
 def test_same_named_dataclass_copies_fold_as_exact_duplicates():
     source = b"""\
 @dataclass
-class AgeGroupSpec:
-    minimum_age: int
-    maximum_age: int = 99
+class Bounds:
+    lower: int
+    upper: int = 99
 """
     first = parse(source)[0]
     second = parse(source)[0]
@@ -87,15 +87,15 @@ class AgeGroupSpec:
     assert duplicates == {1: [units[2]]}
 
 
-def test_same_shape_dataclasses_with_different_names_remain_semantic_candidates():
+def test_different_dataclass_bodies_are_not_folded_as_exact_copies():
     template = """\
 @dataclass
 class {name}:
-    minimum_age: int
-    maximum_age: int = 99
+    lower: int
+    upper: int = 99
 """
-    first = parse(template.format(name="AgeGroupSpec").encode())[0]
-    second = parse(template.format(name="CustomerAgeSpec").encode())[0]
+    first = parse(template.format(name="Bounds").encode())[0]
+    second = parse(template.format(name="Limits").encode())[0]
     units = {1: _parsed_unit(1, first), 2: _parsed_unit(2, second)}
 
     folded, duplicates = fold_exact_duplicates([Cluster([1, 2], 0.9, 0.95)], units)

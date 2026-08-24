@@ -206,9 +206,7 @@ def _optional_str_list(raw: dict[str, Any], key: str, source: str) -> list[str]:
     return items
 
 
-def _optional_source_extensions(
-    raw: dict[str, Any], source: str
-) -> list[str] | None:
+def _optional_source_extensions(raw: dict[str, Any], source: str) -> list[str] | None:
     if raw.get("source_extensions") is None:
         return None
     extensions = _optional_str_list(raw, "source_extensions", source)
